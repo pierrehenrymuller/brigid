@@ -1,5 +1,6 @@
 # Brigid with PostgreSQL, for podman-compose (rootless, SELinux) or docker compose.
-#   podman-compose -f compose.yml up -d --build
+#   podman-compose -f compose.yml up -d
+# Local build: add -f compose.build.yml and --build.
 #
 # Required, in a .env file next to this one (read by compose, not by the app):
 #   POSTGRES_PASSWORD=...   openssl rand -base64 24 | tr -d '/+='
@@ -31,10 +32,9 @@ services:
       retries: 10
 
   app:
-    build:
-      context: .
-      dockerfile: Containerfile
-    image: localhost/brigid:latest
+    # Published by .github/workflows/image.yml on every push to main.
+    # BRIGID_TAG pins a commit (12 characters) instead of following latest.
+    image: ghcr.io/pierrehenrymuller/brigid:${BRIGID_TAG:-latest}
     restart: unless-stopped
     depends_on:
       db:

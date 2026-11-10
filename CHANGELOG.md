@@ -1,20 +1,18 @@
-## 2026-11-10 21:30
+## 2026-11-10 22:10
 ### Contexte
-fais une branche pour ajouter un containerfile et compose.yml pour pouvoir conteneuriser ce projet. Il doit marcher avec le podman local. Pas d'IA pour le moment, mais pouvoir regler Ollama dans l'application. Pas de sauvegarde dans les conteneurs (autre conteneur dedie). Pas de Makefile (fork d'un projet libre).
+Portainer, stack from a remote git repo, failed: "compose build operation failed: mkdir /.docker: permission denied". Request: publish the image on GitHub, public package, built on every push to main.
 
 ### Justification des décisions
-- Single-stage Containerfile: the server runs TypeScript through tsx, so the installed dependencies are needed at runtime anyway.
-- No pg_dump in the image: backups are handled by a dedicated container. The app reports the backup tools as unavailable.
-- pgcrypto is created by an init script on the db volume: the migrations do not create it, the setup wizard (skipped here) did.
-- DATABASE_URL and SESSION_SECRET come from compose, so the setup wizard is not used.
-- Port bound to 127.0.0.1 by default (BRIGID_BIND to change): the app has no TLS of its own.
-- Healthcheck in compose.yml: podman builds OCI images, which drop HEALTHCHECK.
-- Images pinned by digest.
-- Risk: the aardvark-dns file for the unused `ai` network was stale on the build host and blocked any new rootless network; removed it locally (host fix, not part of the repo).
-- Rollback: delete the branch, or `podman-compose -f compose.yml down -v`.
+- Portainer runs docker compose build inside its own container, where HOME is not writable: building there is fragile. The image is built by GitHub Actions and pulled by Portainer.
+- ghcr.io, public package (chosen by the user): Portainer pulls without credentials. The package is created private by GitHub and must be switched to public once in Package settings.
+- The workflow only calls .github/build-image.sh, which also runs locally (build only without GHCR_TOKEN).
+- compose.yml has no build block any more: with both image and build, a deployment tool could retry a build. The local build is in compose.build.yml.
+- Trigger: push to main (chosen by the user); BRIGID_TAG pins a 12-character commit.
+- Risk: the workflow was not run on GitHub (it only triggers on main). Checked locally: bash -n, shellcheck, YAML parse, podman-compose config on both files, script build with tags and source label.
+- Rollback: revert the merge commit; compose.yml then builds locally again.
 
 ### Modifications
-- Containerfile, compose.yml, .containerignore, deploy/container/init-pgcrypto.sql: new.
-- README.md: "Containers" section.
-- Verified: build OK, stack healthy, /api/health returns database true, / returns 200, app runs as uid 1000, pgcrypto present, 22 tables migrated, no errors in the app log.
-- Commands that changed the host: rm -f ~/.local/share/containers/podman-run/networks/aardvark-dns/ai
+- .github/build-image.sh, .github/workflows/image.yml, compose.build.yml: new.
+- compose.yml: image ghcr.io/pierrehenrymuller/brigid:${BRIGID_TAG:-latest}, build block removed.
+- README.md: Containers section updated.
+
