@@ -1,0 +1,62 @@
+# Brigid with PostgreSQL, for podman-compose (rootless, SELinux) or docker compose.
+#   podman-compose -f compose.yml up -d --build
+#
+# Required, in a .env file next to this one (read by compose, not by the app):
+#   POSTGRES_PASSWORD=...   openssl rand -base64 24 | tr -d '/+='
+#   SESSION_SECRET=...      openssl rand -base64 48
+# Optional:
+#   BRIGID_BIND=0.0.0.0     expose on the network (default: this host only,
+#                           put a reverse proxy in front for HTTPS)
+#   APP_ORIGIN=https://brigid.example.org  public URL, scheme + host, no path
+#   SECURE_COOKIES=1        when the browser reaches the app over HTTPS
+#
+# Ollama (optional, set in the app's Settings): a model on the host is reached
+# at http://host.containers.internal:11434 from inside the container.
+services:
+  db:
+    image: docker.io/library/postgres:17-trixie@sha256:996e9dc583ba9f0265a2c75547a9c95fb22c251e394749cab205a0a00e1856a1
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: brigid
+      POSTGRES_DB: brigid
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # :Z relabels the file for SELinux (Fedora).
+      - ./deploy/container/init-pgcrypto.sql:/docker-entrypoint-initdb.d/10-pgcrypto.sql:ro,Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brigid -d brigid"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/brigid:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8090"
+      HOST: 0.0.0.0
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8090}
+      SECURE_COOKIES: ${SECURE_COOKIES:-0}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      DATABASE_URL: postgres://brigid:${POSTGRES_PASSWORD}@db:5432/brigid
+    ports:
+      - "${BRIGID_BIND:-127.0.0.1}:8090:8090"
+    volumes:
+      - brigid-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  pgdata:
+  brigid-data:
