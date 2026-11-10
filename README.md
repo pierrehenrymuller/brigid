@@ -97,6 +97,33 @@ during that step.
 
 ---
 
+### Containers (Podman or Docker)
+
+`compose.yml` runs Brigid and PostgreSQL 17 in two containers. Create a `.env`
+file next to it:
+
+```bash
+POSTGRES_PASSWORD=<openssl rand -base64 24 | tr -d '/+='>
+SESSION_SECRET=<openssl rand -base64 48>
+```
+
+Then:
+
+```bash
+podman-compose -f compose.yml up -d --build
+```
+
+Brigid answers on `http://127.0.0.1:8090`. Set `BRIGID_BIND=0.0.0.0` to reach it
+from the network, and `APP_ORIGIN` / `SECURE_COOKIES=1` when it sits behind an
+HTTPS reverse proxy. The `-f compose.yml` matters: podman-compose does not look
+for that file name by itself.
+
+The setup wizard is skipped because the database is configured by the compose
+file. The image has no `pg_dump`, so the built-in backups are unavailable: back
+up the `pgdata` volume (or dump the database) from a dedicated container. To use
+Ollama running on the host, enter `http://host.containers.internal:11434` in
+Settings.
+
 ## First run
 
 When the installer finishes it prints an address, something like:
