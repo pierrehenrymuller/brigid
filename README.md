@@ -110,8 +110,13 @@ SESSION_SECRET=<openssl rand -base64 48>
 Then:
 
 ```bash
-podman-compose -f compose.yml up -d --build
+podman-compose -f compose.yml up -d
 ```
+
+The image is pulled from `ghcr.io/pierrehenrymuller/brigid`, built by GitHub
+Actions on every push to `main` (`BRIGID_TAG` pins a commit). To build it
+locally instead, add `-f compose.build.yml` and `--build`. A Portainer stack from
+this repository works with the same two variables and needs no build.
 
 Brigid answers on `http://127.0.0.1:8090`. Set `BRIGID_BIND=0.0.0.0` to reach it
 from the network, and `APP_ORIGIN` / `SECURE_COOKIES=1` when it sits behind an
