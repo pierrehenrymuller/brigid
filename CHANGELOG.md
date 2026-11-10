@@ -1,18 +1,15 @@
-## 2026-11-10 22:10
+## 2026-11-10 22:40
 ### Contexte
-Portainer, stack from a remote git repo, failed: "compose build operation failed: mkdir /.docker: permission denied". Request: publish the image on GitHub, public package, built on every push to main.
+Portainer stack (pasted in the web editor, not pulled from git) failed: "dependency failed to start: container brigid-db-1 is unhealthy". Request: go on with the fix.
 
 ### Justification des décisions
-- Portainer runs docker compose build inside its own container, where HOME is not writable: building there is fragile. The image is built by GitHub Actions and pulled by Portainer.
-- ghcr.io, public package (chosen by the user): Portainer pulls without credentials. The package is created private by GitHub and must be switched to public once in Package settings.
-- The workflow only calls .github/build-image.sh, which also runs locally (build only without GHCR_TOKEN).
-- compose.yml has no build block any more: with both image and build, a deployment tool could retry a build. The local build is in compose.build.yml.
-- Trigger: push to main (chosen by the user); BRIGID_TAG pins a 12-character commit.
-- Risk: the workflow was not run on GitHub (it only triggers on main). Checked locally: bash -n, shellcheck, YAML parse, podman-compose config on both files, script build with tags and source label.
-- Rollback: revert the merge commit; compose.yml then builds locally again.
+- Cause (Portainer API, GET only): the relative bind mount ./deploy/container/init-pgcrypto.sql does not exist on the host when the stack is pasted in the editor, Docker created a directory, and postgres failed with "could not read from input file: Is a directory". The db restarted but the depends_on window was over.
+- pgcrypto is not needed: the schema only uses gen_random_uuid(), built in since PostgreSQL 13 (the pgcrypto creation in the setup wizard is a belt-and-braces for older servers). The init script and its mount are removed.
+- Alternative kept out: an inline init command in compose.yml. Useless once the extension is not required.
+- Checked: stack started locally without the mount, both containers healthy, /api/health database true, 22 tables, gen_random_uuid() works.
+- Rollback: revert the merge commit.
 
 ### Modifications
-- .github/build-image.sh, .github/workflows/image.yml, compose.build.yml: new.
-- compose.yml: image ghcr.io/pierrehenrymuller/brigid:${BRIGID_TAG:-latest}, build block removed.
-- README.md: Containers section updated.
+- deploy/container/init-pgcrypto.sql: deleted.
+- compose.yml: bind mount of the init script removed.
 
